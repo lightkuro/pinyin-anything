@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Pinyin Anything test page</title>
+    <style>
+      body { font: 20px/1.6 sans-serif; max-width: 720px; margin: 24px auto; padding: 0 16px; }
+      h2 { font-size: 15px; color: #666; margin: 28px 0 4px; }
+    </style>
+  </head>
+  <body>
+    <h2>Chinese</h2>
+    <p id="zh">银行行长说：你好，<b>世界</b>！Hello 2024.</p>
+    <h2>Japanese</h2>
+    <p id="ja">私は<a href="#">東京</a>へ行って、コーヒーを飲みました。</p>
+    <p id="ja-kanji" lang="ja">日本語</p>
+    <h2>Mixed page: short words rely on context</h2>
+    <p id="zh-context">我们去<b id="zh-word">日本</b>旅行。</p>
+    <p id="ja-context">明日、<b id="ja-word">日本</b>に帰ります。</p>
+    <h2>Korean</h2>
+    <p id="ko">안녕하세요! 한국어를 공부합니다.</p>
+    <h2>Left alone</h2>
+    <pre id="pre">代码 コード 코드</pre>
+    <textarea id="textarea">你好</textarea>
+    <p id="editable" contenteditable="true">可以编辑</p>
+    <p id="ruby"><ruby>漢<rt>かん</rt></ruby></p>
+    <p id="latin">Plain English text.</p>
+    <div id="dynamic"></div>
+  </body>
+</html>

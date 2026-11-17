@@ -26,8 +26,17 @@ extension's card.
 ## Use
 
 Annotation is off everywhere until you ask for it. Open a page, click the extension icon and
-switch on **Annotate this site** — the choice is remembered per site. `Alt+Shift+P` toggles the
-current site without opening the popup.
+switch on **Annotate this site** — the choice is remembered per site.
+
+**Lyrics, tabs and other text shown as code.** Text inside code blocks is skipped by default,
+because annotations get in the way of real code. Some sites — Ultimate Guitar, for one — put
+ordinary lyrics in code blocks. On those, also switch on **Include code blocks**; it is
+remembered per site too.
+
+**Keyboard shortcut.** A shortcut toggles the current site without opening the popup. The
+default is `Alt+Shift+P`, but Chrome leaves it unassigned if something else already uses it. The
+bottom of the popup shows the shortcut actually in effect, and **Change** opens Chrome's
+shortcut page (`chrome://extensions/shortcuts`), the only place Chrome allows it to be set.
 
 Pages that were already open when you installed the extension need one reload.
 
@@ -138,8 +147,10 @@ server, so it needs no network. Screenshots are written to `test/e2e/output/`.
 
 ## Limitations
 
-- Text inside code blocks, form fields, editable areas and existing `<ruby>` is left alone on
-  purpose.
+- Text inside form fields, editable areas and existing `<ruby>` is always left alone. Code blocks
+  are left alone unless you switch on **Include code blocks** for the site.
+- Annotations make lines wider, so on guitar tabs the chords above a lyric line can drift out
+  of position. A smaller annotation size, or placing annotations below, reduces this.
 - Text inside shadow DOM (some web components) is not annotated.
 - A few web apps keep their own references to text on the page and can show stale text after an
   update while annotated. Switch the site off if a page misbehaves.

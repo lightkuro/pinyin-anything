@@ -14,13 +14,30 @@ import type {
 } from '../shared/types';
 
 const WRAPPER = 'pya-text';
-const SKIP = new Set([
+/** Never annotated: not visible text, form controls, or already annotated. */
+const ALWAYS_SKIP = [
   'SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'TEXTAREA', 'INPUT', 'SELECT', 'OPTION',
-  'CODE', 'PRE', 'KBD', 'SAMP', 'RUBY', 'RT', 'RP', 'SVG', 'MATH', 'IFRAME', 'CANVAS',
-  WRAPPER.toUpperCase(),
-]);
-const SKIP_SELECTOR =
-  [...SKIP].join(',').toLowerCase() + ',[contenteditable=""],[contenteditable="true"],[contenteditable="plaintext-only"]';
+  'RUBY', 'RT', 'RP', 'SVG', 'MATH', 'IFRAME', 'CANVAS', WRAPPER.toUpperCase(),
+];
+/**
+ * Skipped by default because annotations get in the way of real code, but
+ * some sites (lyrics, guitar tabs) put ordinary text in these; the user can
+ * include them per site.
+ */
+const CODE_TAGS = ['CODE', 'PRE', 'KBD', 'SAMP'];
+const EDITABLE = '[contenteditable=""],[contenteditable="true"],[contenteditable="plaintext-only"]';
+
+let includeCode = false;
+let skipTags = new Set<string>();
+let skipSelector = '';
+
+function setIncludeCode(include: boolean): void {
+  includeCode = include;
+  skipTags = new Set(include ? ALWAYS_SKIP : [...ALWAYS_SKIP, ...CODE_TAGS]);
+  skipSelector = `${[...skipTags].join(',').toLowerCase()},${EDITABLE}`;
+}
+setIncludeCode(false);
+
 const BATCH_CHARS = 4000;
 const BATCH_NODES = 250;
 
@@ -104,7 +121,7 @@ function hanLanguage(node: Text): HanLanguage | null {
 // ---------------------------------------------------------------- collecting
 
 function skipped(el: Element | null): boolean {
-  return !el || el.closest(SKIP_SELECTOR) !== null;
+  return !el || el.closest(skipSelector) !== null;
 }
 
 function consider(node: Text): void {
@@ -122,7 +139,7 @@ function scan(root: Node): void {
     acceptNode(node) {
       if (node.nodeType === Node.TEXT_NODE) return NodeFilter.FILTER_ACCEPT;
       const el = node as HTMLElement;
-      if (SKIP.has(el.tagName.toUpperCase()) || el.isContentEditable) return NodeFilter.FILTER_REJECT;
+      if (skipTags.has(el.tagName.toUpperCase()) || el.isContentEditable) return NodeFilter.FILTER_REJECT;
       return NodeFilter.FILTER_SKIP;
     },
   });
@@ -290,15 +307,19 @@ async function sync(): Promise<void> {
   const enabled = key !== null && state.sites[key] === true;
   const previous = settings;
   settings = state.settings;
+  const wantCode = key !== null && state.codeSites[key] === true;
+  const codeChanged = wantCode !== includeCode;
+  setIncludeCode(wantCode);
 
   if (enabled) {
     applyLook(settings);
     if (!active) start();
     else if (
-      previous &&
-      (previous.language !== settings.language ||
-        previous.pinyinTone !== settings.pinyinTone ||
-        previous.japanese !== settings.japanese)
+      codeChanged ||
+      (previous &&
+        (previous.language !== settings.language ||
+          previous.pinyinTone !== settings.pinyinTone ||
+          previous.japanese !== settings.japanese))
     ) {
       rescan();
     }
@@ -313,7 +334,7 @@ async function sync(): Promise<void> {
 }
 
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'sync' && (changes.settings || changes.sites)) void sync();
+  if (area === 'sync' && (changes.settings || changes.sites || changes.codeSites)) void sync();
   // The Japanese dictionary was installed or removed: text that was skipped
   // can now be annotated, or the other way round.
   if (area === 'local' && changes[DICT_CHANGED_KEY] && active) rescan();

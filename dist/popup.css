@@ -36,7 +36,7 @@ body {
 }
 
 header {
-  padding: 14px 16px 10px;
+  padding: 12px 16px 8px;
 }
 
 .brand {
@@ -63,7 +63,7 @@ h1 {
 }
 
 section {
-  margin: 0 12px 10px;
+  margin: 0 12px 8px;
   padding: 4px 12px;
   background: var(--panel);
   border: 1px solid var(--line);
@@ -76,7 +76,7 @@ section {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 44px;
+  min-height: 40px;
 }
 
 .row + .row {
@@ -157,6 +157,18 @@ progress {
 .switch-row {
   cursor: pointer;
   padding: 6px 0;
+}
+
+.switch-row + .switch-row {
+  border-top: 1px solid var(--line);
+}
+
+.switch-row:has(input:disabled) {
+  cursor: default;
+}
+
+.switch-row:has(input:disabled) .label {
+  color: var(--muted);
 }
 
 .switch-row input {
@@ -261,9 +273,22 @@ output {
 }
 
 footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
   padding: 2px 16px 14px;
   color: var(--muted);
   font-size: 12px;
+}
+
+button.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font-size: 12px;
+  text-decoration: underline;
 }
 
 kbd {

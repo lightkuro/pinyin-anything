@@ -1,7 +1,7 @@
 import { annotateChinese } from '../engines/chinese';
 import { addKorean } from '../engines/korean';
 import { DICT_CACHE, dictionaryReady } from '../shared/dictionary';
-import { DICT_CHANGED_KEY, loadState, setSiteEnabled, siteKey } from '../shared/settings';
+import { DICT_CHANGED_KEY, loadState, setSite, siteKey } from '../shared/settings';
 import type {
   AnnotateRequest,
   AnnotateResponse,
@@ -131,5 +131,5 @@ chrome.commands.onCommand.addListener(async (command) => {
   const key = siteKey(tab?.url);
   if (!key) return;
   const { sites } = await loadState();
-  await setSiteEnabled(key, !sites[key]);
+  await setSite('sites', key, !sites[key]);
 });

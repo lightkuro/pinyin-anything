@@ -1,10 +1,11 @@
 import { DICT_BYTES } from '../shared/dictionary';
-import { loadState, saveSettings, setSiteEnabled, siteKey } from '../shared/settings';
+import { loadState, saveSettings, setSite, siteKey } from '../shared/settings';
 import type { DictionaryProgress, DictionaryRequest, DictionaryStatus, Settings } from '../shared/types';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
 const enabled = $<HTMLInputElement>('enabled');
+const code = $<HTMLInputElement>('code');
 const site = $('site');
 const notice = $('notice');
 const size = $<HTMLInputElement>('size');
@@ -87,7 +88,7 @@ void askDictionary('status');
 // ---------------------------------------------------------------- settings
 
 async function init(): Promise<void> {
-  const [{ settings, sites }, [tab]] = await Promise.all([
+  const [{ settings, sites, codeSites }, [tab]] = await Promise.all([
     loadState(),
     chrome.tabs.query({ active: true, currentWindow: true }),
   ]);
@@ -95,16 +96,21 @@ async function init(): Promise<void> {
 
   if (key === null) {
     enabled.disabled = true;
+    code.disabled = true;
     site.textContent = 'Not available on this page';
   } else {
     site.textContent = key === 'file:' ? 'Local files' : key;
     enabled.checked = sites[key] === true;
+    code.checked = codeSites[key] === true;
+    code.disabled = !enabled.checked;
     if (enabled.checked && tab?.id !== undefined) void checkTab(tab.id);
     enabled.addEventListener('change', async () => {
-      await setSiteEnabled(key, enabled.checked);
+      code.disabled = !enabled.checked;
+      await setSite('sites', key, enabled.checked);
       if (enabled.checked && tab?.id !== undefined) await checkTab(tab.id);
       else showNotice(null);
     });
+    code.addEventListener('change', () => void setSite('codeSites', key, code.checked));
   }
 
   for (const radio of document.querySelectorAll<HTMLInputElement>('input[name="position"]')) {
@@ -126,4 +132,23 @@ async function init(): Promise<void> {
   size.addEventListener('change', () => void saveSettings({ size: Number(size.value) }));
 }
 
+// ---------------------------------------------------------------- shortcut
+
+// Chrome only lets shortcuts be changed on its own settings page, so show the
+// current one and link there.
+async function showShortcut(): Promise<void> {
+  const commands = await chrome.commands.getAll();
+  const shortcut = commands.find((command) => command.name === 'toggle-site')?.shortcut ?? '';
+  const key = $('shortcut');
+  key.hidden = shortcut === '';
+  key.textContent = shortcut;
+  $('shortcutText').textContent = shortcut ? 'Shortcut to toggle this site:' : 'No shortcut to toggle this site.';
+  $('shortcutChange').textContent = shortcut ? 'Change' : 'Set one';
+}
+
+$('shortcutChange').addEventListener('click', () => {
+  void chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
+});
+
+void showShortcut();
 void init();

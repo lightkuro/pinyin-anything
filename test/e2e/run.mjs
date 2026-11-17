@@ -172,7 +172,7 @@ try {
     waitForReadings('#ko', 'annyeonghaseyo hangugeoreul gongbuhamnida'));
 
   await step('leaves code, form fields, editable text and existing ruby alone', async () => {
-    assert.equal(await page.locator('#pre pya-text, #textarea pya-text, #editable pya-text, #ruby pya-text, #latin pya-text').count(), 0);
+    assert.equal(await page.locator('#pre pya-text, #code pya-text, #textarea pya-text, #editable pya-text, #ruby pya-text, #latin pya-text').count(), 0);
   });
 
   await step('keeps the visible text unchanged and annotations out of selections', async () => {
@@ -250,6 +250,42 @@ try {
     assert.equal(await page.locator('#ko pya-text').count(), 0);
     await setSettings({ language: 'auto' });
     await waitForReadings('#ja-kanji', 'nihongo');
+  });
+
+  await step('annotates code blocks only on sites where that is switched on', async () => {
+    await setStorage({ codeSites: { localhost: true } });
+    await waitForReadings('#pre', 'wǒ men yì qǐ chàng zhè shǒu gē');
+    await waitForReadings('#code', 'biàn liàng');
+    assert.equal(await page.locator('#pre .chord').count(), 2, 'other markup in the block is untouched');
+    assert.equal(await page.locator('#textarea pya-text, #editable pya-text, #ruby pya-text').count(), 0);
+    await page.screenshot({ path: join(output, 'code.png'), caret: 'initial' });
+    await setStorage({ codeSites: { 'example.com': true } });
+    await waitForReadings('#pre', '');
+    await waitForReadings('#code', '');
+    await waitForReadings('#zh', 'yín háng háng zhǎng shuō nǐ hǎo shì jiè');
+    await setStorage({ codeSites: {} });
+  });
+
+  await step('popup shows the shortcut and links to where Chrome lets you change it', async () => {
+    const expected = await popup.evaluate(async () =>
+      (await chrome.commands.getAll()).find((command) => command.name === 'toggle-site').shortcut,
+    );
+    if (expected) {
+      assert.equal(await popup.textContent('#shortcut'), expected);
+      assert.equal(await popup.textContent('#shortcutChange'), 'Change');
+    } else {
+      assert.equal(await popup.locator('#shortcut').isVisible(), false);
+      assert.equal(await popup.textContent('#shortcutChange'), 'Set one');
+    }
+    console.log(`    (shortcut in this browser: ${expected || 'none'})`);
+    // Chrome caps popups at 600px tall; anything more would scroll.
+    const height = await popup.evaluate(() => document.documentElement.scrollHeight);
+    assert.ok(height <= 600, `popup is ${height}px tall`);
+    await popup.setViewportSize({ width: 320, height });
+    await popup.screenshot({ path: join(output, 'popup.png') });
+    const [opened] = await Promise.all([context.waitForEvent('page'), popup.click('#shortcutChange')]);
+    assert.equal(opened.url(), 'chrome://extensions/shortcuts');
+    await opened.close();
   });
 
   await step('popup reflects and changes settings', async () => {

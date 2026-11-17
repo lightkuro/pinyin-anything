@@ -15,13 +15,19 @@ export interface State {
   settings: Settings;
   /** Sites the user has switched annotation on for, keyed by siteKey(). */
   sites: Record<string, true>;
+  /** Sites where code and preformatted blocks are annotated too. */
+  codeSites: Record<string, true>;
 }
 
+/** The per-site switches kept in storage. */
+export type SiteList = 'sites' | 'codeSites';
+
 export async function loadState(): Promise<State> {
-  const stored = await chrome.storage.sync.get(['settings', 'sites']);
+  const stored = await chrome.storage.sync.get(['settings', 'sites', 'codeSites']);
   return {
     settings: { ...DEFAULTS, ...(stored.settings as Partial<Settings> | undefined) },
     sites: (stored.sites as Record<string, true> | undefined) ?? {},
+    codeSites: (stored.codeSites as Record<string, true> | undefined) ?? {},
   };
 }
 
@@ -30,11 +36,11 @@ export async function saveSettings(patch: Partial<Settings>): Promise<void> {
   await chrome.storage.sync.set({ settings: { ...settings, ...patch } });
 }
 
-export async function setSiteEnabled(key: string, enabled: boolean): Promise<void> {
-  const { sites } = await loadState();
-  if (enabled) sites[key] = true;
+export async function setSite(list: SiteList, key: string, on: boolean): Promise<void> {
+  const sites = (await loadState())[list];
+  if (on) sites[key] = true;
   else delete sites[key];
-  await chrome.storage.sync.set({ sites });
+  await chrome.storage.sync.set({ [list]: sites });
 }
 
 /**

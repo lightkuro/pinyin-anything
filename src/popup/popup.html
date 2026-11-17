@@ -22,6 +22,14 @@
         <input type="checkbox" id="enabled" role="switch" />
         <span class="switch" aria-hidden="true"></span>
       </label>
+      <label class="switch-row" for="code">
+        <span>
+          <span class="label">Include code blocks</span>
+          <span class="hint">For lyrics and tabs shown as code</span>
+        </span>
+        <input type="checkbox" id="code" role="switch" />
+        <span class="switch" aria-hidden="true"></span>
+      </label>
       <p class="notice" id="notice" hidden></p>
     </section>
 
@@ -89,7 +97,11 @@
       </div>
     </section>
 
-    <footer>Toggle the current site with <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd></footer>
+    <footer>
+      <span id="shortcutText">Shortcut to toggle this site:</span>
+      <kbd id="shortcut" hidden></kbd>
+      <button type="button" class="link" id="shortcutChange">Change</button>
+    </footer>
     <script src="popup.js"></script>
   </body>
 </html>

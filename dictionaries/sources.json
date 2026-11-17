@@ -1,0 +1,14 @@
+{
+  "built": "2026-11-17",
+  "entries": {
+    "zh": 125423,
+    "ja": 219135,
+    "ko": 88797
+  },
+  "sources": {
+    "cedict.txt.gz": "https://www.mdbg.net/chinese/export/cedict/cedict_1_0_ts_utf-8_mdbg.txt.gz",
+    "JMdict_e.gz": "https://www.edrdg.org/pub/Nihongo/JMdict_e.gz",
+    "ko-wiktionary.jsonl": "https://kaikki.org/dictionary/Korean/kaikki.org-dictionary-Korean.jsonl",
+    "kengdic.tsv": "https://cdn.jsdelivr.net/gh/garfieldnate/kengdic@master/kengdic.tsv"
+  }
+}

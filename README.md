@@ -12,7 +12,7 @@ above or below the original text.
 ## Install
 
 The extension is built from source (the Japanese dictionary is too large to keep in the repo).
-You need [Node.js](https://nodejs.org) 20 or newer.
+You need [Node.js](https://nodejs.org) 22 or newer.
 
 ```bash
 npm install

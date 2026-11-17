@@ -1,18 +1,113 @@
-import { DICT_BYTES } from '../shared/dictionary';
+import { PACK_IDS, packBytes } from '../shared/packs';
 import { loadState, saveSettings, setSite, siteKey } from '../shared/settings';
-import type { DictionaryProgress, DictionaryRequest, DictionaryStatus, Settings } from '../shared/types';
+import type { PackId, PackProgress, PackRequest, PackStatus, Settings } from '../shared/types';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
-const enabled = $<HTMLInputElement>('enabled');
-const code = $<HTMLInputElement>('code');
-const site = $('site');
-const notice = $('notice');
-const size = $<HTMLInputElement>('size');
-const sizeValue = $('sizeValue');
-const selects = ['language', 'pinyinTone', 'japanese'] as const;
+// ---------------------------------------------------------------- views
 
-function showNotice(text: string | null): void {
+const mainView = $('mainView');
+const settingsView = $('settingsView');
+
+function showSettings(open: boolean): void {
+  mainView.hidden = open;
+  settingsView.hidden = !open;
+  (open ? $('closeSettings') : $('openSettings')).focus();
+}
+$('openSettings').addEventListener('click', () => showSettings(true));
+$('closeSettings').addEventListener('click', () => showSettings(false));
+
+// ---------------------------------------------------------------- downloads
+
+const PACK_LABELS: Record<PackId, { name: string; purpose: string }> = {
+  'ja-readings': { name: 'Japanese readings', purpose: 'Needed to annotate Japanese' },
+  'zh-meanings': { name: 'Chinese meanings', purpose: 'Word meanings' },
+  'ja-meanings': { name: 'Japanese meanings', purpose: 'Word meanings' },
+  'ko-meanings': { name: 'Korean meanings', purpose: 'Word meanings' },
+};
+
+const megabytes = (bytes: number) => `${bytes < 9.95e6 ? (bytes / 1e6).toFixed(1) : Math.round(bytes / 1e6)} MB`;
+const packStates = new Map<PackId, PackStatus['state']>();
+const packViews = new Map<PackId, (status: PackStatus) => void>();
+
+function addPackRow(pack: PackId): void {
+  const row = ($<HTMLTemplateElement>('packRow').content.cloneNode(true) as DocumentFragment).firstElementChild!;
+  row.id = `pack-${pack}`;
+  const hint = row.querySelector<HTMLElement>('.hint')!;
+  const button = row.querySelector('button')!;
+  const progress = row.querySelector('progress')!;
+  const size = megabytes(packBytes(pack));
+  let action: PackRequest['action'] = 'download';
+  row.querySelector('.label')!.textContent = PACK_LABELS[pack].name;
+
+  const show = (status: PackStatus) => {
+    packStates.set(pack, status.state);
+    button.hidden = false;
+    button.disabled = false;
+    button.classList.toggle('primary', status.state === 'missing' || status.state === 'error');
+    progress.hidden = status.state !== 'downloading';
+    switch (status.state) {
+      case 'missing':
+        hint.textContent = `${PACK_LABELS[pack].purpose} · ${size}`;
+        button.textContent = 'Download';
+        action = 'download';
+        break;
+      case 'downloading':
+        hint.textContent = `Downloading… ${megabytes(status.received)} of ${megabytes(status.total)}`;
+        progress.value = status.total ? status.received / status.total : 0;
+        button.textContent = 'Cancel';
+        action = 'remove';
+        break;
+      case 'ready':
+        hint.textContent = `Downloaded · ${size}`;
+        button.textContent = 'Remove';
+        action = 'remove';
+        break;
+      case 'error':
+        hint.textContent = `Download failed: ${status.message}`;
+        button.textContent = 'Retry';
+        action = 'download';
+        break;
+    }
+    showPackHints();
+  };
+  packViews.set(pack, show);
+
+  const ask = async (what: PackRequest['action']) => {
+    const request: PackRequest = { type: 'pack', pack, action: what };
+    try {
+      show(await chrome.runtime.sendMessage(request));
+    } catch (error) {
+      show({ state: 'error', message: String(error) });
+    }
+  };
+  button.addEventListener('click', () => {
+    button.disabled = true;
+    void ask(action);
+  });
+  $('packs').append(row);
+  void ask('status');
+}
+
+chrome.runtime.onMessage.addListener((message: PackProgress) => {
+  if (message?.type === 'pack-progress') packViews.get(message.pack)?.(message.status);
+});
+
+// ---------------------------------------------------------------- hints that depend on downloads
+
+const notice = $('notice');
+let needsReload = false;
+let pageHasJapanese = false;
+
+function showPackHints(): void {
+  const anyMeanings = PACK_IDS.some((pack) => pack.endsWith('-meanings') && packStates.get(pack) === 'ready');
+  $('meaningsHint').textContent = anyMeanings ? 'Point at a word to see it' : 'Download a dictionary in Settings';
+
+  let text: string | null = null;
+  if (needsReload) text = 'Reload this tab to start annotating it.';
+  else if (pageHasJapanese && packStates.has('ja-readings') && packStates.get('ja-readings') !== 'ready') {
+    text = 'This page has Japanese text. Japanese readings are a separate download — see Settings.';
+  }
   notice.hidden = text === null;
   notice.textContent = text ?? '';
 }
@@ -20,72 +115,33 @@ function showNotice(text: string | null): void {
 /** Pages opened before the extension was installed have no content script yet. */
 async function checkTab(tabId: number): Promise<void> {
   try {
-    await chrome.tabs.sendMessage(tabId, { type: 'ping' });
-    showNotice(null);
+    const reply = await chrome.tabs.sendMessage(tabId, { type: 'ping' });
+    needsReload = false;
+    pageHasJapanese = reply?.japanese === true;
   } catch {
-    showNotice('Reload this tab to start annotating it.');
+    needsReload = true;
   }
+  showPackHints();
 }
-
-// ---------------------------------------------------------------- Japanese dictionary
-
-const dictHint = $('dictHint');
-const dictButton = $<HTMLButtonElement>('dictButton');
-const dictProgress = $<HTMLProgressElement>('dictProgress');
-const megabytes = (bytes: number) => `${Math.round(bytes / 1e6)} MB`;
-let dictAction: DictionaryRequest['action'] = 'download';
-
-function showDictionary(status: DictionaryStatus): void {
-  dictButton.hidden = false;
-  dictButton.disabled = false;
-  dictButton.classList.toggle('primary', status.state === 'missing' || status.state === 'error');
-  dictProgress.hidden = status.state !== 'downloading';
-  switch (status.state) {
-    case 'missing':
-      dictHint.textContent = `Needs a ${megabytes(DICT_BYTES)} dictionary`;
-      dictButton.textContent = 'Download';
-      dictAction = 'download';
-      break;
-    case 'downloading':
-      dictHint.textContent = `Downloading… ${megabytes(status.received)} of ${megabytes(status.total)}`;
-      dictProgress.value = status.total ? status.received / status.total : 0;
-      dictButton.textContent = 'Cancel';
-      dictAction = 'remove';
-      break;
-    case 'ready':
-      dictHint.textContent = `Downloaded · ${megabytes(DICT_BYTES)}`;
-      dictButton.textContent = 'Remove';
-      dictAction = 'remove';
-      break;
-    case 'error':
-      dictHint.textContent = `Download failed: ${status.message}`;
-      dictButton.textContent = 'Retry';
-      dictAction = 'download';
-      break;
-  }
-}
-
-async function askDictionary(action: DictionaryRequest['action']): Promise<void> {
-  const request: DictionaryRequest = { type: 'dictionary', action };
-  try {
-    showDictionary(await chrome.runtime.sendMessage(request));
-  } catch (error) {
-    showDictionary({ state: 'error', message: String(error) });
-  }
-}
-
-dictButton.addEventListener('click', () => {
-  dictButton.disabled = true;
-  void askDictionary(dictAction);
-});
-
-chrome.runtime.onMessage.addListener((message: DictionaryProgress) => {
-  if (message?.type === 'dictionary-progress') showDictionary(message.status);
-});
-
-void askDictionary('status');
 
 // ---------------------------------------------------------------- settings
+
+const enabled = $<HTMLInputElement>('enabled');
+const code = $<HTMLInputElement>('code');
+const size = $<HTMLInputElement>('size');
+const sizeValue = $('sizeValue');
+const selects = ['language', 'chinese', 'pinyinTone', 'japanese', 'visibility', 'color'] as const;
+
+/** Jyutping has no tone-mark spelling, so the choices follow the reading. */
+function showToneChoices(chinese: Settings['chinese'], current: Settings['pinyinTone']): void {
+  const choices: [Settings['pinyinTone'], string][] =
+    chinese === 'jyutping'
+      ? [['symbol', 'Numbers (nei5 hou2)'], ['none', 'None (nei hou)']]
+      : [['symbol', 'Marks (nǐ hǎo)'], ['num', 'Numbers (ni3 hao3)'], ['none', 'None (ni hao)']];
+  const select = $<HTMLSelectElement>('pinyinTone');
+  select.replaceChildren(...choices.map(([value, label]) => new Option(label, value)));
+  select.value = chinese === 'jyutping' && current === 'num' ? 'symbol' : current;
+}
 
 async function init(): Promise<void> {
   const [{ settings, sites, codeSites }, [tab]] = await Promise.all([
@@ -97,9 +153,9 @@ async function init(): Promise<void> {
   if (key === null) {
     enabled.disabled = true;
     code.disabled = true;
-    site.textContent = 'Not available on this page';
+    $('site').textContent = 'Not available on this page';
   } else {
-    site.textContent = key === 'file:' ? 'Local files' : key;
+    $('site').textContent = key === 'file:' ? 'Local files' : key;
     enabled.checked = sites[key] === true;
     code.checked = codeSites[key] === true;
     code.disabled = !enabled.checked;
@@ -108,7 +164,10 @@ async function init(): Promise<void> {
       code.disabled = !enabled.checked;
       await setSite('sites', key, enabled.checked);
       if (enabled.checked && tab?.id !== undefined) await checkTab(tab.id);
-      else showNotice(null);
+      else {
+        needsReload = false;
+        showPackHints();
+      }
     });
     code.addEventListener('change', () => void setSite('codeSites', key, code.checked));
   }
@@ -120,11 +179,21 @@ async function init(): Promise<void> {
     });
   }
 
+  showToneChoices(settings.chinese, settings.pinyinTone);
   for (const id of selects) {
     const select = $<HTMLSelectElement>(id);
-    select.value = settings[id];
-    select.addEventListener('change', () => void saveSettings({ [id]: select.value }));
+    if (id !== 'pinyinTone') select.value = settings[id];
+    select.addEventListener('change', () => {
+      void saveSettings({ [id]: select.value });
+      if (id === 'chinese') {
+        showToneChoices(select.value as Settings['chinese'], $<HTMLSelectElement>('pinyinTone').value as Settings['pinyinTone']);
+      }
+    });
   }
+
+  const meanings = $<HTMLInputElement>('meanings');
+  meanings.checked = settings.meanings;
+  meanings.addEventListener('change', () => void saveSettings({ meanings: meanings.checked }));
 
   size.value = String(settings.size);
   sizeValue.textContent = `${settings.size}%`;
@@ -139,16 +208,15 @@ async function init(): Promise<void> {
 async function showShortcut(): Promise<void> {
   const commands = await chrome.commands.getAll();
   const shortcut = commands.find((command) => command.name === 'toggle-site')?.shortcut ?? '';
-  const key = $('shortcut');
-  key.hidden = shortcut === '';
-  key.textContent = shortcut;
-  $('shortcutText').textContent = shortcut ? 'Shortcut to toggle this site:' : 'No shortcut to toggle this site.';
-  $('shortcutChange').textContent = shortcut ? 'Change' : 'Set one';
+  $('shortcutHint').textContent = shortcut || 'Not set';
+  $('shortcutChange').textContent = shortcut ? 'Change' : 'Set';
 }
 
 $('shortcutChange').addEventListener('click', () => {
   void chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
 });
 
+for (const pack of PACK_IDS) addPackRow(pack);
+showPackHints();
 void showShortcut();
 void init();

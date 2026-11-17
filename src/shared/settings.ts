@@ -3,13 +3,17 @@ import type { Settings } from './types';
 export const DEFAULTS: Settings = {
   position: 'over',
   language: 'auto',
+  size: 55,
+  meanings: true,
+  chinese: 'pinyin',
   pinyinTone: 'symbol',
   japanese: 'romaji',
-  size: 55,
+  visibility: 'always',
+  color: 'inherit',
 };
 
-/** storage.local key bumped whenever the Japanese dictionary is installed or removed. */
-export const DICT_CHANGED_KEY = 'japaneseDictionaryChanged';
+/** storage.local key bumped whenever a download is installed or removed. */
+export const PACKS_CHANGED_KEY = 'packsChanged';
 
 export interface State {
   settings: Settings;

@@ -1,6 +1,6 @@
 {
   "name": "pinyin-anything",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Chrome extension that adds pinyin, romaji and Korean romanization above or below text on any page.",
   "private": true,
   "type": "module",
@@ -14,10 +14,12 @@
     "es-hangul": "^2.4.0",
     "kuromoji": "^0.1.2",
     "pinyin-pro": "^3.29.5",
+    "to-jyutping": "^3.1.1",
     "wanakana": "^5.3.1"
   },
   "devDependencies": {
     "@types/chrome": "^0.3.7",
+    "@types/node": "^26.6.6",
     "esbuild": "^0.28.2",
     "typescript": "^7.0.2",
     "vitest": "^5.1.0"

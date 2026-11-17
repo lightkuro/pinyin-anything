@@ -27,3 +27,22 @@ pya-text rt {
   user-select: none;
   -webkit-user-select: none;
 }
+
+/* Readings in a quieter shade of whatever colour the text is. */
+html[pya-color='muted'] pya-text rt {
+  color: color-mix(in srgb, currentColor 55%, transparent);
+}
+
+/* Study mode: readings stay hidden until the pointer is on the text. */
+html[pya-visibility='hover'] pya-text rt {
+  visibility: hidden;
+}
+
+html[pya-visibility='hover'] pya-text:hover rt {
+  visibility: visible;
+}
+
+/* The word whose meaning is being shown. */
+::highlight(pya-word) {
+  background-color: rgb(250 204 21 / 0.45);
+}

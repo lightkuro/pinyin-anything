@@ -5,17 +5,29 @@ export interface Segment {
 }
 
 export type HanLanguage = 'zh' | 'ja';
+export type Language = HanLanguage | 'ko';
 export type PinyinTone = 'symbol' | 'num' | 'none';
 export type JapaneseStyle = 'romaji' | 'hiragana';
+export type ChineseReading = 'pinyin' | 'jyutping';
 
 export interface Settings {
   position: 'over' | 'under';
   language: 'auto' | 'zh' | 'ja' | 'ko';
-  pinyinTone: PinyinTone;
-  japanese: JapaneseStyle;
   /** Annotation font size, as a percentage of the annotated text. */
   size: number;
+  /** Show a word's meaning when the pointer rests on it. */
+  meanings: boolean;
+  /** How Chinese is read: Mandarin (pinyin) or Cantonese (jyutping). */
+  chinese: ChineseReading;
+  pinyinTone: PinyinTone;
+  japanese: JapaneseStyle;
+  /** Whether readings are always visible or only appear under the pointer. */
+  visibility: 'always' | 'hover';
+  /** Reading colour: the text's own colour, or a quieter grey. */
+  color: 'inherit' | 'muted';
 }
+
+// ---------------------------------------------------------------- annotating
 
 export interface AnnotateItem {
   text: string;
@@ -28,6 +40,7 @@ export interface AnnotateItem {
 export interface AnnotateRequest {
   type: 'annotate';
   items: AnnotateItem[];
+  chinese: ChineseReading;
   pinyinTone: PinyinTone;
   japanese: JapaneseStyle;
 }
@@ -41,39 +54,73 @@ export interface StateMessage {
   enabled: boolean;
 }
 
-export interface JapaneseRequest {
-  target: 'offscreen';
-  type: 'japanese';
-  texts: string[];
-  style: JapaneseStyle;
+// ---------------------------------------------------------------- meanings
+
+/** One dictionary entry, ready to show. */
+export interface Meaning {
+  word: string;
+  reading: string;
+  senses: string[];
 }
 
-export interface JapaneseResponse {
-  segments?: Segment[][];
-  error?: string;
+export interface LookupRequest {
+  type: 'lookup';
+  text: string;
+  /** Index in `text` of the character under the pointer. */
+  offset: number;
+  language: Language;
+  /** Show Cantonese rather than Mandarin readings for Chinese words. */
+  cantonese: boolean;
 }
 
-/** Where the downloadable Japanese dictionary stands. */
-export type DictionaryStatus =
+/** The word found at the requested position, as a range of the request's text. */
+export interface LookupResult {
+  start: number;
+  end: number;
+  meanings: Meaning[];
+}
+
+// ---------------------------------------------------------------- engine worker
+
+/** Work done by the worker inside the offscreen document. */
+export type EngineRequest =
+  | { kind: 'japanese'; texts: string[]; style: JapaneseStyle }
+  | { kind: 'cantonese'; texts: string[]; tone: PinyinTone }
+  | { kind: 'lookup'; text: string; offset: number; language: Language; cantonese: boolean }
+  | { kind: 'unload'; pack: PackId };
+
+export type EngineResponse =
+  | { segments: Segment[][] }
+  | { result: LookupResult | null }
+  | { ok: true }
+  | { error: string };
+
+/** Service worker → offscreen document. */
+export type OffscreenRequest =
+  | { target: 'offscreen'; type: 'engine'; request: EngineRequest }
+  | { target: 'offscreen'; type: 'pack-status' | 'pack-download' | 'pack-remove'; pack: PackId };
+
+// ---------------------------------------------------------------- downloads
+
+/** Things the user can download: Japanese readings, and word meanings per language. */
+export type PackId = 'ja-readings' | 'zh-meanings' | 'ja-meanings' | 'ko-meanings';
+
+export type PackStatus =
   | { state: 'missing' }
   | { state: 'downloading'; received: number; total: number }
   | { state: 'ready' }
   | { state: 'error'; message: string };
 
 /** Popup → service worker. */
-export interface DictionaryRequest {
-  type: 'dictionary';
+export interface PackRequest {
+  type: 'pack';
+  pack: PackId;
   action: 'status' | 'download' | 'remove';
 }
 
-/** Service worker → offscreen document. */
-export interface OffscreenDictionaryRequest {
-  target: 'offscreen';
-  type: 'dictionary-status' | 'dictionary-download';
-}
-
 /** Offscreen document → everyone, while a download runs. */
-export interface DictionaryProgress {
-  type: 'dictionary-progress';
-  status: DictionaryStatus;
+export interface PackProgress {
+  type: 'pack-progress';
+  pack: PackId;
+  status: PackStatus;
 }

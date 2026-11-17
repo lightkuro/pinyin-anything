@@ -2,22 +2,24 @@
 // work happens in the extension's background; this script only touches the DOM,
 // and does nothing at all until the user enables the site.
 import { guessHanLanguage, hasCjk, hasHan, hasHangul, hasKana } from '../shared/script';
-import { DICT_CHANGED_KEY, loadState, siteKey } from '../shared/settings';
+import { PACKS_CHANGED_KEY, loadState, siteKey } from '../shared/settings';
 import type {
   AnnotateItem,
   AnnotateRequest,
   AnnotateResponse,
   HanLanguage,
+  Language,
   Segment,
   Settings,
   StateMessage,
 } from '../shared/types';
+import { createMeanings } from './meanings';
 
 const WRAPPER = 'pya-text';
 /** Never annotated: not visible text, form controls, or already annotated. */
 const ALWAYS_SKIP = [
   'SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'TEXTAREA', 'INPUT', 'SELECT', 'OPTION',
-  'RUBY', 'RT', 'RP', 'SVG', 'MATH', 'IFRAME', 'CANVAS', WRAPPER.toUpperCase(),
+  'RUBY', 'RT', 'RP', 'SVG', 'MATH', 'IFRAME', 'CANVAS', WRAPPER.toUpperCase(), 'PYA-TIP',
 ];
 /**
  * Skipped by default because annotations get in the way of real code, but
@@ -62,6 +64,10 @@ const pending = new Set<Text>();
 /** Text nodes that were checked and need no annotation, so they are not re-sent. */
 let settled = new WeakSet<Text>();
 const originals = new WeakMap<Element, string>();
+/** How the Han characters in each annotated piece of text were read. */
+const wrapperLanguages = new WeakMap<Element, HanLanguage | null>();
+/** Whether this page has had Japanese text to annotate (the popup asks). */
+let sawJapanese = false;
 let nearbyCache = new WeakMap<Element, HanLanguage | null>();
 
 // ---------------------------------------------------------------- language
@@ -199,15 +205,17 @@ async function pump(): Promise<void> {
         han: hanLanguage(node),
         ko: settings!.language === 'auto' || settings!.language === 'ko' ? hasHangul(node.data) : false,
       }));
+      if (items.some((item) => item.han === 'ja')) sawJapanese = true;
       const request: AnnotateRequest = {
         type: 'annotate',
         items,
+        chinese: settings!.chinese,
         pinyinTone: settings!.pinyinTone,
         japanese: settings!.japanese,
       };
       const response: AnnotateResponse | undefined = await chrome.runtime.sendMessage(request);
       if (mine !== generation || !active) continue;
-      nodes.forEach((node, i) => render(node, items[i].text, response?.segments[i]));
+      nodes.forEach((node, i) => render(node, items[i], response?.segments[i]));
       // Let the page breathe between batches.
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
@@ -221,7 +229,8 @@ async function pump(): Promise<void> {
   }
 }
 
-function render(node: Text, sent: string, segments: Segment[] | undefined): void {
+function render(node: Text, item: AnnotateItem, segments: Segment[] | undefined): void {
+  const sent = item.text;
   if (!node.isConnected) return;
   if (node.data !== sent) {
     pending.add(node); // the page changed it while we were waiting
@@ -244,6 +253,7 @@ function render(node: Text, sent: string, segments: Segment[] | undefined): void
     wrapper.append(ruby);
   }
   originals.set(wrapper, sent);
+  wrapperLanguages.set(wrapper, item.han);
   node.replaceWith(wrapper);
 }
 
@@ -270,9 +280,13 @@ function reset(): void {
   pageLanguage = undefined;
 }
 
+const LOOK_ATTRIBUTES = ['pya-position', 'pya-visibility', 'pya-color'];
+
 function applyLook(next: Settings): void {
   const root = document.documentElement;
   root.setAttribute('pya-position', next.position);
+  root.setAttribute('pya-visibility', next.visibility);
+  root.setAttribute('pya-color', next.color);
   root.style.setProperty('--pya-size', `${next.size}%`);
 }
 
@@ -286,16 +300,18 @@ function start(): void {
 function stop(): void {
   active = false;
   observer.disconnect();
+  meanings.hide();
   reset();
   restoreAll();
   const root = document.documentElement;
-  root.removeAttribute('pya-position');
+  for (const attribute of LOOK_ATTRIBUTES) root.removeAttribute(attribute);
   root.style.removeProperty('--pya-size');
   if (root.getAttribute('style') === '') root.removeAttribute('style');
 }
 
 function rescan(): void {
   observer.disconnect();
+  meanings.hide();
   reset();
   restoreAll();
   start();
@@ -318,11 +334,13 @@ async function sync(): Promise<void> {
       codeChanged ||
       (previous &&
         (previous.language !== settings.language ||
+          previous.chinese !== settings.chinese ||
           previous.pinyinTone !== settings.pinyinTone ||
           previous.japanese !== settings.japanese))
     ) {
       rescan();
     }
+    if (!settings.meanings) meanings.hide();
   } else if (active) {
     stop();
   }
@@ -335,14 +353,30 @@ async function sync(): Promise<void> {
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'sync' && (changes.settings || changes.sites || changes.codeSites)) void sync();
-  // The Japanese dictionary was installed or removed: text that was skipped
-  // can now be annotated, or the other way round.
-  if (area === 'local' && changes[DICT_CHANGED_KEY] && active) rescan();
+  // A download was installed or removed: text that was skipped can now be
+  // annotated, or the other way round.
+  if (area === 'local' && changes[PACKS_CHANGED_KEY] && active) rescan();
 });
 
 // Lets the popup find out whether this tab has a live content script.
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message?.type === 'ping') sendResponse({ ok: true });
+  if (message?.type === 'ping') sendResponse({ ok: true, japanese: sawJapanese });
+});
+
+// ---------------------------------------------------------------- word meanings
+
+const meanings = createMeanings({
+  enabled: () => active && settings?.meanings === true,
+  cantonese: () => settings?.chinese === 'jyutping',
+  wrapperTag: WRAPPER,
+  originalText: (wrapper) => originals.get(wrapper),
+  languageOf(char, node, wrapper): Language | null {
+    const language = settings!.language;
+    if (hasHangul(char)) return language === 'auto' || language === 'ko' ? 'ko' : null;
+    if (language === 'ko') return null;
+    if (hasKana(char)) return language === 'zh' ? null : 'ja';
+    return wrapper ? (wrapperLanguages.get(wrapper) ?? null) : hanLanguage(node);
+  },
 });
 
 void sync();

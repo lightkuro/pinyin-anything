@@ -27,6 +27,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body {
   width: 320px;
   margin: 0;
@@ -35,7 +39,20 @@ body {
   font: 13px/1.4 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
+main {
+  padding-bottom: 6px;
+}
+
+/* Chrome caps a popup at 600px; the longer settings view scrolls inside it. */
+#settingsView {
+  max-height: 600px;
+  overflow-y: auto;
+}
+
 header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   padding: 12px 16px 8px;
 }
 
@@ -62,6 +79,15 @@ h1 {
   font-weight: 600;
 }
 
+h2 {
+  margin: 10px 16px 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 section {
   margin: 0 12px 8px;
   padding: 4px 12px;
@@ -79,7 +105,8 @@ section {
   min-height: 40px;
 }
 
-.row + .row {
+section > * + *,
+.pack + .pack {
   border-top: 1px solid var(--line);
 }
 
@@ -99,12 +126,19 @@ section {
 }
 
 .notice {
-  margin: 0 0 10px;
+  margin: 0;
+  padding: 8px 0;
   color: var(--muted);
   font-size: 12px;
 }
 
-/* Languages */
+.credits {
+  margin: 0 16px 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* Buttons */
 button {
   flex: none;
   padding: 5px 12px;
@@ -122,7 +156,8 @@ button.primary {
   color: var(--accent-text);
 }
 
-button:focus-visible {
+button:focus-visible,
+select:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -132,17 +167,46 @@ button:disabled {
   cursor: default;
 }
 
-.languages .hint {
+/* A whole row that leads somewhere else */
+button.nav {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: none;
+  text-align: left;
+}
+
+button.nav .hint {
+  flex: 1;
+  max-width: none;
+  text-align: right;
+}
+
+.chevron {
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+}
+
+button.back {
+  padding: 0 8px 2px 2px;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font-size: 22px;
+  line-height: 1;
+}
+
+/* Downloads */
+.pack .hint {
   max-width: 190px;
   white-space: normal;
 }
 
-.languages .row > .hint {
-  white-space: nowrap;
-}
-
-progress[hidden] {
-  display: none;
+.pack .row {
+  padding: 4px 0;
 }
 
 progress {
@@ -156,11 +220,7 @@ progress {
 /* Switch */
 .switch-row {
   cursor: pointer;
-  padding: 6px 0;
-}
-
-.switch-row + .switch-row {
-  border-top: 1px solid var(--line);
+  padding: 4px 0;
 }
 
 .switch-row:has(input:disabled) {
@@ -270,31 +330,4 @@ output {
   color: var(--muted);
   text-align: right;
   font-variant-numeric: tabular-nums;
-}
-
-footer {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 16px 14px;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-button.link {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--accent);
-  font-size: 12px;
-  text-decoration: underline;
-}
-
-kbd {
-  padding: 1px 5px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--panel);
-  font: inherit;
 }

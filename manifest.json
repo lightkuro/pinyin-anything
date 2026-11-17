@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Pinyin Anything",
-  "version": "1.0.0",
-  "description": "Adds pinyin, romaji or Korean romanization above or below Chinese, Japanese and Korean text on any page.",
+  "version": "1.1.0",
+  "description": "Adds pinyin, jyutping, romaji or Korean romanization above or below Chinese, Japanese and Korean text, with word meanings.",
   "minimum_chrome_version": "116",
   "icons": {
     "16": "icons/icon16.png",

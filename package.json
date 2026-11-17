@@ -7,7 +7,7 @@
   "scripts": {
     "build": "node build.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run && node scripts/check-dist.mjs",
     "test:e2e": "node test/e2e/run.mjs"
   },
   "dependencies": {

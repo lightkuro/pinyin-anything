@@ -11,21 +11,17 @@ above or below the original text.
 
 ## Install
 
-The extension is built from source. You need [Node.js](https://nodejs.org) 22 or newer.
+No build step is needed — the ready-to-use extension is the `dist` folder in this repository.
 
-```bash
-npm install
-```
+1. [Download this repository as a ZIP](https://github.com/lightkuro/pinyin-anything/archive/refs/heads/main.zip)
+   and unzip it.
+2. Open `chrome://extensions` in Chrome.
+3. Switch on **Developer mode** (top right).
+4. Click **Load unpacked** and choose the `dist` folder inside the unzipped folder.
 
-```bash
-npm run build
-```
-
-Then in Chrome:
-
-1. Open `chrome://extensions`.
-2. Switch on **Developer mode** (top right).
-3. Click **Load unpacked** and choose the `dist` folder.
+Keep the unzipped folder where it is: Chrome loads the extension from there each time it starts.
+To update, download the ZIP again, replace the folder, and click the reload button on the
+extension's card.
 
 ## Use
 
@@ -100,6 +96,20 @@ Everything runs locally. No text leaves your browser; the only network request t
 ever makes is the dictionary download you start yourself.
 
 ## Development
+
+You need [Node.js](https://nodejs.org) 22 or newer.
+
+```bash
+npm install
+```
+
+```bash
+npm run build
+```
+
+`npm run build` rewrites `dist/`. That folder is committed so the extension can be installed
+without building, so commit it together with any source change; `npm test` fails if the two have
+drifted apart.
 
 ```bash
 npm test

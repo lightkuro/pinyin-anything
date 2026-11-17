@@ -1,5 +1,4 @@
 node_modules/
-dist/
 dist-test/
 *.zip
 test/e2e/output/

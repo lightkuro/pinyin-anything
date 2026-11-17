@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Pinyin Anything</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <ruby>拼<rt>pīn</rt></ruby>
+        <h1>Pinyin Anything</h1>
+      </div>
+    </header>
+
+    <section class="site">
+      <label class="switch-row" for="enabled">
+        <span>
+          <span class="label">Annotate this site</span>
+          <span class="hint" id="site">…</span>
+        </span>
+        <input type="checkbox" id="enabled" role="switch" />
+        <span class="switch" aria-hidden="true"></span>
+      </label>
+      <p class="notice" id="notice" hidden></p>
+    </section>
+
+    <section class="languages" aria-label="Languages">
+      <div class="row">
+        <span class="label">Chinese</span>
+        <span class="hint">Built in</span>
+      </div>
+      <div class="row">
+        <span class="label">Korean</span>
+        <span class="hint">Built in</span>
+      </div>
+      <div class="row" id="japaneseRow">
+        <span>
+          <span class="label">Japanese</span>
+          <span class="hint" id="dictHint"></span>
+        </span>
+        <button type="button" id="dictButton" hidden></button>
+      </div>
+      <progress id="dictProgress" max="1" value="0" hidden></progress>
+    </section>
+
+    <section class="options">
+      <div class="row">
+        <span class="label" id="position-label">Position</span>
+        <div class="segmented" role="radiogroup" aria-labelledby="position-label">
+          <label><input type="radio" name="position" value="over" /><span>Above</span></label>
+          <label><input type="radio" name="position" value="under" /><span>Below</span></label>
+        </div>
+      </div>
+
+      <div class="row">
+        <label class="label" for="language">Language</label>
+        <select id="language">
+          <option value="auto">Auto-detect</option>
+          <option value="zh">Chinese only</option>
+          <option value="ja">Japanese only</option>
+          <option value="ko">Korean only</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <label class="label" for="pinyinTone">Pinyin tones</label>
+        <select id="pinyinTone">
+          <option value="symbol">Marks (nǐ hǎo)</option>
+          <option value="num">Numbers (ni3 hao3)</option>
+          <option value="none">None (ni hao)</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <label class="label" for="japanese">Japanese style</label>
+        <select id="japanese">
+          <option value="romaji">Romaji (nihongo)</option>
+          <option value="hiragana">Hiragana (にほんご)</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <label class="label" for="size">Size</label>
+        <div class="range">
+          <input type="range" id="size" min="35" max="100" step="5" />
+          <output id="sizeValue" for="size"></output>
+        </div>
+      </div>
+    </section>
+
+    <footer>Toggle the current site with <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd></footer>
+    <script src="popup.js"></script>
+  </body>
+</html>

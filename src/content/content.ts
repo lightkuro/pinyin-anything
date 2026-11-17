@@ -2,7 +2,7 @@
 // work happens in the extension's background; this script only touches the DOM,
 // and does nothing at all until the user enables the site.
 import { guessHanLanguage, hasCjk, hasHan, hasHangul, hasKana } from '../shared/script';
-import { loadState, siteKey } from '../shared/settings';
+import { DICT_CHANGED_KEY, loadState, siteKey } from '../shared/settings';
 import type {
   AnnotateItem,
   AnnotateRequest,
@@ -314,6 +314,9 @@ async function sync(): Promise<void> {
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'sync' && (changes.settings || changes.sites)) void sync();
+  // The Japanese dictionary was installed or removed: text that was skipped
+  // can now be annotated, or the other way round.
+  if (area === 'local' && changes[DICT_CHANGED_KEY] && active) rescan();
 });
 
 // Lets the popup find out whether this tab has a live content script.

@@ -1,27 +1,36 @@
 import { annotateChinese } from '../engines/chinese';
 import { addKorean } from '../engines/korean';
-import { loadState, setSiteEnabled, siteKey } from '../shared/settings';
+import { DICT_CACHE, dictionaryReady } from '../shared/dictionary';
+import { DICT_CHANGED_KEY, loadState, setSiteEnabled, siteKey } from '../shared/settings';
 import type {
   AnnotateRequest,
   AnnotateResponse,
+  DictionaryProgress,
+  DictionaryRequest,
+  DictionaryStatus,
   JapaneseRequest,
   JapaneseResponse,
+  OffscreenDictionaryRequest,
   Segment,
   StateMessage,
 } from '../shared/types';
 
 let creatingOffscreen: Promise<void> | null = null;
 
-async function ensureOffscreen(): Promise<void> {
+async function hasOffscreen(): Promise<boolean> {
   const existing = await chrome.runtime.getContexts({
     contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT],
   });
-  if (existing.length > 0) return;
+  return existing.length > 0;
+}
+
+async function ensureOffscreen(): Promise<void> {
+  if (await hasOffscreen()) return;
   creatingOffscreen ??= chrome.offscreen
     .createDocument({
       url: 'offscreen.html',
       reasons: [chrome.offscreen.Reason.WORKERS],
-      justification: 'Runs the Japanese dictionary in a worker shared by all tabs.',
+      justification: 'Downloads the Japanese dictionary and runs it in a worker shared by all tabs.',
     })
     .finally(() => {
       creatingOffscreen = null;
@@ -29,7 +38,29 @@ async function ensureOffscreen(): Promise<void> {
   await creatingOffscreen;
 }
 
+/** Tells open pages to look again, now that Japanese has become (un)available. */
+const announceDictionaryChange = () => chrome.storage.local.set({ [DICT_CHANGED_KEY]: Date.now() });
+
+async function dictionary(action: DictionaryRequest['action']): Promise<DictionaryStatus> {
+  if (action === 'remove') {
+    // Closing the document also stops a running download and frees the worker's memory.
+    if (await hasOffscreen()) await chrome.offscreen.closeDocument();
+    await caches.delete(DICT_CACHE);
+    await announceDictionaryChange();
+    return { state: 'missing' };
+  }
+  if (await dictionaryReady()) return { state: 'ready' };
+  if (action === 'download') await ensureOffscreen();
+  else if (!(await hasOffscreen())) return { state: 'missing' };
+  const request: OffscreenDictionaryRequest = {
+    target: 'offscreen',
+    type: action === 'download' ? 'dictionary-download' : 'dictionary-status',
+  };
+  return chrome.runtime.sendMessage(request);
+}
+
 async function japanese(texts: string[], style: AnnotateRequest['japanese']): Promise<Segment[][]> {
+  if (!(await dictionaryReady())) throw new Error('Japanese dictionary is not downloaded');
   await ensureOffscreen();
   const request: JapaneseRequest = { target: 'offscreen', type: 'japanese', texts, style };
   const response: JapaneseResponse = await chrome.runtime.sendMessage(request);
@@ -49,9 +80,9 @@ async function annotate(request: AnnotateRequest): Promise<AnnotateResponse> {
         request.japanese,
       );
       jaIndexes.forEach((index, n) => (segments[index] = results[n]));
-    } catch (error) {
-      // Leave Japanese text un-annotated rather than failing the whole batch.
-      console.warn('Pinyin Anything: Japanese annotation failed', error);
+    } catch {
+      // Dictionary not downloaded, or the engine failed: leave Japanese text
+      // un-annotated rather than failing the whole batch.
     }
   }
 
@@ -62,14 +93,25 @@ async function annotate(request: AnnotateRequest): Promise<AnnotateResponse> {
   return { segments };
 }
 
+type Incoming = AnnotateRequest | StateMessage | DictionaryRequest | DictionaryProgress;
+
 chrome.runtime.onMessage.addListener(
-  (message: AnnotateRequest | StateMessage | JapaneseRequest, sender, sendResponse) => {
+  (message: Incoming, sender, sendResponse) => {
     if (message?.type === 'annotate') {
       annotate(message).then(sendResponse, (error) => {
         console.error('Pinyin Anything: annotate failed', error);
         sendResponse({ segments: message.items.map((item) => [{ t: item.text }]) });
       });
       return true; // respond asynchronously
+    }
+    if (message?.type === 'dictionary') {
+      dictionary(message.action).then(sendResponse, (error) =>
+        sendResponse({ state: 'error', message: String(error) } satisfies DictionaryStatus),
+      );
+      return true;
+    }
+    if (message?.type === 'dictionary-progress' && message.status.state === 'ready') {
+      void announceDictionaryChange();
     }
     if (message?.type === 'state' && sender.tab?.id !== undefined) {
       void chrome.action.setBadgeText({ tabId: sender.tab.id, text: message.enabled ? 'on' : '' });

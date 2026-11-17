@@ -1,6 +1,8 @@
-// End-to-end check: loads the built extension into Chromium and exercises it
-// on a real page. Run `npm run build` first.
+// End-to-end check: builds the extension, loads it into Chromium and exercises
+// it on a real page. The Japanese dictionary is served from a local server
+// instead of the public CDN, so the test needs no network.
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { readFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
@@ -10,16 +12,39 @@ import { fileURLToPath } from 'node:url';
 
 const { chromium } = createRequire(import.meta.url)('playwright');
 const here = dirname(fileURLToPath(import.meta.url));
-const dist = resolve(here, '../../dist');
+const root = resolve(here, '../..');
+const dist = join(root, 'dist-test');
 const output = join(here, 'output');
 await mkdir(output, { recursive: true });
 
 const fixture = await readFile(join(here, 'fixture.html'));
-const server = createServer((_req, res) => {
-  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-  res.end(fixture);
+/** Set to a file name to serve that dictionary file damaged, once. */
+let damageOnce = null;
+const dictRequests = [];
+const server = createServer(async (req, res) => {
+  const dictFile = /^\/dict\/([\w.]+)$/.exec(req.url)?.[1];
+  if (!dictFile) {
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    res.end(fixture);
+    return;
+  }
+  dictRequests.push(dictFile);
+  const bytes = await readFile(join(root, 'node_modules/kuromoji/dict', dictFile));
+  if (damageOnce === dictFile) {
+    damageOnce = null;
+    bytes[bytes.length >> 1] ^= 0xff;
+  }
+  res.writeHead(200, { 'content-type': 'application/gzip', 'access-control-allow-origin': '*' });
+  res.end(bytes);
 }).listen(0);
-const url = `http://localhost:${server.address().port}/`;
+const origin = `http://localhost:${server.address().port}`;
+const url = `${origin}/`;
+
+execFileSync(process.execPath, ['build.mjs'], {
+  cwd: root,
+  env: { ...process.env, PYA_OUT: dist, PYA_DICT_URL: `${origin}/dict/` },
+  stdio: 'ignore',
+});
 
 const profile = await mkdtemp(join(tmpdir(), 'pya-e2e-'));
 const context = await chromium.launchPersistentContext(profile, {
@@ -74,10 +99,71 @@ try {
   await setStorage({ sites: { localhost: true } });
 
   await step('annotates Chinese with pinyin', () => waitForReadings('#zh', 'yín háng háng zhǎng shuō nǐ hǎo shì jiè'));
-  await step('annotates Japanese with romaji', async () => {
+
+  // ---- Japanese is a separate download, driven from the popup
+  const popup = await context.newPage();
+  const popupErrors = [];
+  popup.on('pageerror', (error) => popupErrors.push(String(error)));
+  await popup.setViewportSize({ width: 320, height: 560 });
+  await popup.goto(`chrome-extension://${extensionId}/popup.html`);
+  const dictHint = popup.locator('#dictHint');
+  const dictButton = popup.locator('#dictButton');
+  const waitForHint = (pattern) =>
+    popup.waitForFunction(
+      (source) => new RegExp(source).test(document.querySelector('#dictHint').textContent),
+      pattern.source,
+      { timeout: 30_000 },
+    );
+  const cachedFiles = () =>
+    worker.evaluate(async () =>
+      (await caches.has('japanese-dictionary')) ? (await (await caches.open('japanese-dictionary')).keys()).length : 0,
+    );
+
+  await step('ships without the Japanese dictionary and leaves Japanese text alone', async () => {
+    await waitForHint(/^Needs a 18 MB dictionary$/);
+    assert.equal(await dictButton.textContent(), 'Download');
+    assert.equal(await popup.locator('#dictProgress').isVisible(), false);
+    assert.equal(await page.locator('#ja pya-text, #ja-kanji pya-text, #ja-context pya-text').count(), 0);
+    assert.deepEqual(dictRequests, [], 'nothing is downloaded until asked');
+    await popup.screenshot({ path: join(output, 'popup-before-download.png') });
+  });
+
+  await step('rejects a damaged download and keeps nothing from the bad file', async () => {
+    damageOnce = 'cc.dat.gz';
+    await dictButton.click();
+    await waitForHint(/^Download failed: cc\.dat\.gz did not match its checksum$/);
+    assert.equal(await dictButton.textContent(), 'Retry');
+    assert.equal(await page.locator('#ja pya-text').count(), 0);
+  });
+
+  await step('downloads on request, resuming with the files it already has', async () => {
+    const before = dictRequests.length;
+    await dictButton.click();
+    await waitForHint(/^Downloaded · 18 MB$/);
+    assert.equal(await dictButton.textContent(), 'Remove');
+    assert.equal(await popup.locator('#dictProgress').isVisible(), false);
+    assert.equal(await cachedFiles(), 12);
+    const again = dictRequests.slice(before);
+    assert.ok(again.includes('cc.dat.gz') && !again.includes('base.dat.gz'), `re-fetched: ${again}`);
+    await popup.screenshot({ path: join(output, 'popup.png') });
+  });
+
+  await step('annotates Japanese with romaji as soon as the download finishes', async () => {
     await waitForReadings('#ja', 'watashi wa toukyou e itte koohii o nomimashita');
     await waitForReadings('#ja-kanji', 'nihongo');
   });
+
+  await step('removes the dictionary and its annotations on request', async () => {
+    await dictButton.click();
+    await waitForHint(/^Needs a 18 MB dictionary$/);
+    assert.equal(await cachedFiles(), 0);
+    await waitForReadings('#ja', '');
+    await waitForReadings('#zh', 'yín háng háng zhǎng shuō nǐ hǎo shì jiè');
+    await dictButton.click();
+    await waitForHint(/^Downloaded · 18 MB$/);
+    await waitForReadings('#ja', 'watashi wa toukyou e itte koohii o nomimashita');
+  });
+
   await step('reads the same word by its context on a mixed-language page', async () => {
     await waitForReadings('#zh-word', 'rì běn');
     await waitForReadings('#ja-word', 'nippon');
@@ -166,19 +252,13 @@ try {
     await waitForReadings('#ja-kanji', 'nihongo');
   });
 
-  await step('popup renders and reflects settings', async () => {
-    const popup = await context.newPage();
-    const popupErrors = [];
-    popup.on('pageerror', (error) => popupErrors.push(String(error)));
-    await popup.setViewportSize({ width: 320, height: 420 });
-    await popup.goto(`chrome-extension://${extensionId}/popup.html`);
-    await popup.waitForFunction(() => document.querySelector('#sizeValue').textContent !== '');
+  await step('popup reflects and changes settings', async () => {
     assert.equal(await popup.inputValue('#language'), 'auto');
     assert.equal(await popup.isChecked('input[name="position"][value="over"]'), true);
     await popup.locator('label:has(input[value="under"])').click();
     await page.waitForFunction(() => document.documentElement.getAttribute('pya-position') === 'under');
     await popup.locator('label:has(input[value="over"])').click();
-    await popup.screenshot({ path: join(output, 'popup.png') });
+    await page.waitForFunction(() => document.documentElement.getAttribute('pya-position') === 'over');
     assert.deepEqual(popupErrors, []);
     await popup.close();
   });

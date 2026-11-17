@@ -8,6 +8,9 @@ export const DEFAULTS: Settings = {
   size: 55,
 };
 
+/** storage.local key bumped whenever the Japanese dictionary is installed or removed. */
+export const DICT_CHANGED_KEY = 'japaneseDictionaryChanged';
+
 export interface State {
   settings: Settings;
   /** Sites the user has switched annotation on for, keyed by siteKey(). */

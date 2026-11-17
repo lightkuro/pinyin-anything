@@ -11,8 +11,7 @@ above or below the original text.
 
 ## Install
 
-The extension is built from source (the Japanese dictionary is too large to keep in the repo).
-You need [Node.js](https://nodejs.org) 22 or newer.
+The extension is built from source. You need [Node.js](https://nodejs.org) 22 or newer.
 
 ```bash
 npm install
@@ -36,12 +35,28 @@ current site without opening the popup.
 
 Pages that were already open when you installed the extension need one reload.
 
+### Languages and storage
+
+The extension itself is about 0.6 MB. Chinese and Korean are built in. Japanese needs an 18 MB
+dictionary, so it is a separate download: click **Download** next to Japanese in the popup. Until
+then Japanese text is simply left alone. **Remove** deletes the dictionary again.
+
+| Language | Storage | |
+|---|---|---|
+| Chinese | 0.4 MB | Built in |
+| Korean | under 0.1 MB | Built in |
+| Japanese | 18 MB | Downloaded on request |
+
+Chinese and Korean are not separate downloads because they are program code rather than data
+(Chrome does not let an extension download code after it is installed) and together they are
+smaller than one photo.
+
 | Option | Choices |
 |---|---|
 | Position | Above or below the text |
 | Language | Auto-detect, or Chinese / Japanese / Korean only |
 | Pinyin tones | Marks (nǐ hǎo), numbers (ni3 hao3) or none (ni hao) |
-| Japanese | Romaji, or hiragana over kanji only |
+| Japanese style | Romaji, or hiragana over kanji only |
 | Size | Annotation size relative to the text |
 
 Changes apply to open pages immediately. Switching a site off puts the page back exactly as it
@@ -72,12 +87,17 @@ draws <ruby>
   a dictionary into a page; it sends text to the extension and draws the result as `<ruby>`.
 - The **service worker** converts Chinese ([pinyin-pro](https://github.com/zh-lx/pinyin-pro)) and
   Korean ([es-hangul](https://github.com/toss/es-hangul)).
-- Japanese needs a word-by-word analysis and a 17 MB dictionary
+- Japanese needs a word-by-word analysis and a large dictionary
   ([kuromoji](https://github.com/takuyaa/kuromoji.js), kana conversion by
   [WanaKana](https://github.com/WaniKani/WanaKana)). That runs in a worker shared by all tabs and
-  is only started the first time Japanese text is seen.
+  is only started the first time Japanese text is seen. While in use it holds about 100 MB of
+  memory.
+- The dictionary is downloaded from the kuromoji package on the jsDelivr CDN, checked file by
+  file against checksums fixed at build time, and kept in the browser's Cache Storage. An
+  interrupted download picks up where it stopped.
 
-Everything runs locally. No text leaves your browser.
+Everything runs locally. No text leaves your browser; the only network request the extension
+ever makes is the dictionary download you start yourself.
 
 ## Development
 
@@ -93,18 +113,18 @@ npm run typecheck
 npm run test:e2e
 ```
 
-`npm run test:e2e` loads the built extension into Chromium with Playwright and checks it against
-`test/e2e/fixture.html`; run `npm run build` first. Screenshots are written to
-`test/e2e/output/`.
+`npm run test:e2e` builds the extension into `dist-test/`, loads it into Chromium with Playwright
+and checks it against `test/e2e/fixture.html`. It serves the Japanese dictionary from a local
+server, so it needs no network. Screenshots are written to `test/e2e/output/`.
 
 | Path | What it is |
 |---|---|
 | `src/content/` | Finds text, draws and removes annotations |
 | `src/background/` | Message routing, keyboard shortcut, offscreen document lifecycle |
 | `src/engines/` | Text → readings, one file per language |
-| `src/offscreen/` | The page and worker that host the Japanese dictionary |
+| `src/offscreen/` | Downloads the Japanese dictionary and runs it in a worker |
 | `src/popup/` | Settings popup |
-| `src/shared/` | Script detection, settings storage, message types |
+| `src/shared/` | Script detection, settings storage, dictionary location, message types |
 
 ## Limitations
 

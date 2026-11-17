@@ -52,3 +52,28 @@ export interface JapaneseResponse {
   segments?: Segment[][];
   error?: string;
 }
+
+/** Where the downloadable Japanese dictionary stands. */
+export type DictionaryStatus =
+  | { state: 'missing' }
+  | { state: 'downloading'; received: number; total: number }
+  | { state: 'ready' }
+  | { state: 'error'; message: string };
+
+/** Popup → service worker. */
+export interface DictionaryRequest {
+  type: 'dictionary';
+  action: 'status' | 'download' | 'remove';
+}
+
+/** Service worker → offscreen document. */
+export interface OffscreenDictionaryRequest {
+  target: 'offscreen';
+  type: 'dictionary-status' | 'dictionary-download';
+}
+
+/** Offscreen document → everyone, while a download runs. */
+export interface DictionaryProgress {
+  type: 'dictionary-progress';
+  status: DictionaryStatus;
+}

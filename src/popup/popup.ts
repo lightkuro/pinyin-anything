@@ -1,5 +1,6 @@
+import { DICT_BYTES } from '../shared/dictionary';
 import { loadState, saveSettings, setSiteEnabled, siteKey } from '../shared/settings';
-import type { Settings } from '../shared/types';
+import type { DictionaryProgress, DictionaryRequest, DictionaryStatus, Settings } from '../shared/types';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -24,6 +25,66 @@ async function checkTab(tabId: number): Promise<void> {
     showNotice('Reload this tab to start annotating it.');
   }
 }
+
+// ---------------------------------------------------------------- Japanese dictionary
+
+const dictHint = $('dictHint');
+const dictButton = $<HTMLButtonElement>('dictButton');
+const dictProgress = $<HTMLProgressElement>('dictProgress');
+const megabytes = (bytes: number) => `${Math.round(bytes / 1e6)} MB`;
+let dictAction: DictionaryRequest['action'] = 'download';
+
+function showDictionary(status: DictionaryStatus): void {
+  dictButton.hidden = false;
+  dictButton.disabled = false;
+  dictButton.classList.toggle('primary', status.state === 'missing' || status.state === 'error');
+  dictProgress.hidden = status.state !== 'downloading';
+  switch (status.state) {
+    case 'missing':
+      dictHint.textContent = `Needs a ${megabytes(DICT_BYTES)} dictionary`;
+      dictButton.textContent = 'Download';
+      dictAction = 'download';
+      break;
+    case 'downloading':
+      dictHint.textContent = `Downloading… ${megabytes(status.received)} of ${megabytes(status.total)}`;
+      dictProgress.value = status.total ? status.received / status.total : 0;
+      dictButton.textContent = 'Cancel';
+      dictAction = 'remove';
+      break;
+    case 'ready':
+      dictHint.textContent = `Downloaded · ${megabytes(DICT_BYTES)}`;
+      dictButton.textContent = 'Remove';
+      dictAction = 'remove';
+      break;
+    case 'error':
+      dictHint.textContent = `Download failed: ${status.message}`;
+      dictButton.textContent = 'Retry';
+      dictAction = 'download';
+      break;
+  }
+}
+
+async function askDictionary(action: DictionaryRequest['action']): Promise<void> {
+  const request: DictionaryRequest = { type: 'dictionary', action };
+  try {
+    showDictionary(await chrome.runtime.sendMessage(request));
+  } catch (error) {
+    showDictionary({ state: 'error', message: String(error) });
+  }
+}
+
+dictButton.addEventListener('click', () => {
+  dictButton.disabled = true;
+  void askDictionary(dictAction);
+});
+
+chrome.runtime.onMessage.addListener((message: DictionaryProgress) => {
+  if (message?.type === 'dictionary-progress') showDictionary(message.status);
+});
+
+void askDictionary('status');
+
+// ---------------------------------------------------------------- settings
 
 async function init(): Promise<void> {
   const [{ settings, sites }, [tab]] = await Promise.all([

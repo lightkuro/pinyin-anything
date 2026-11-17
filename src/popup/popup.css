@@ -104,6 +104,55 @@ section {
   font-size: 12px;
 }
 
+/* Languages */
+button {
+  flex: none;
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--control);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+button.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.languages .hint {
+  max-width: 190px;
+  white-space: normal;
+}
+
+.languages .row > .hint {
+  white-space: nowrap;
+}
+
+progress[hidden] {
+  display: none;
+}
+
+progress {
+  display: block;
+  width: 100%;
+  height: 6px;
+  margin: 0 0 10px;
+  accent-color: var(--accent);
+}
+
 /* Switch */
 .switch-row {
   cursor: pointer;

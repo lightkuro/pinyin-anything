@@ -25,6 +25,25 @@
       <p class="notice" id="notice" hidden></p>
     </section>
 
+    <section class="languages" aria-label="Languages">
+      <div class="row">
+        <span class="label">Chinese</span>
+        <span class="hint">Built in</span>
+      </div>
+      <div class="row">
+        <span class="label">Korean</span>
+        <span class="hint">Built in</span>
+      </div>
+      <div class="row" id="japaneseRow">
+        <span>
+          <span class="label">Japanese</span>
+          <span class="hint" id="dictHint"></span>
+        </span>
+        <button type="button" id="dictButton" hidden></button>
+      </div>
+      <progress id="dictProgress" max="1" value="0" hidden></progress>
+    </section>
+
     <section class="options">
       <div class="row">
         <span class="label" id="position-label">Position</span>
@@ -54,7 +73,7 @@
       </div>
 
       <div class="row">
-        <label class="label" for="japanese">Japanese</label>
+        <label class="label" for="japanese">Japanese style</label>
         <select id="japanese">
           <option value="romaji">Romaji (nihongo)</option>
           <option value="hiragana">Hiragana (にほんご)</option>
